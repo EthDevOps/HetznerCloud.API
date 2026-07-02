@@ -26,5 +26,10 @@
         /// Hillsboro, OR | us-west
         /// </summary>
         hil,
+
+        /// <summary>
+        /// Singapore | ap-southeast
+        /// </summary>
+        sin,
     }
 }

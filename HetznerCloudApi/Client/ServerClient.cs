@@ -6,6 +6,7 @@ using HetznerCloudApi.Object.Server;
 using HetznerCloudApi.Object.Server.Get;
 using HetznerCloudApi.Object.Universal;
 using HetznerCloudApi.Object.Network;
+using HetznerCloudApi.Object.Datacenter;
 
 namespace HetznerCloudApi.Client
 {
@@ -86,83 +87,16 @@ namespace HetznerCloudApi.Client
             long placementGroupId = 0,
             string userData = "")
         {
-
-            // Location
-            long datacenterId = 0;
-            switch (dataCenter)
-            {
-                case eDataCenter.fsn1:
-                    datacenterId = 4;
-                    break;
-
-                case eDataCenter.nbg1:
-                    datacenterId = 2;
-                    break;
-
-                case eDataCenter.hel1:
-                    datacenterId = 3;
-                    break;
-
-                case eDataCenter.ash:
-                    datacenterId = 5;
-                    break;
-
-                case eDataCenter.hil:
-                    datacenterId = 6;
-                    break;
-            }
-
-            Post post = new Post
-            {
-                Datacenter = datacenterId,
-                Image = imageId,
-                Name = name,
-                ServerType = serverType,
-                PublicNet = new PublicNet
-                {
-                    EnableIpv4 = ipv4,
-                    EnableIpv6 = ipv6
-                },
-                Networks = privateNetoworksIds,
-                SshKeys = sshKeysIds,
-                UserData = userData
-            };
-
-            if (volumesIds != null && volumesIds.Count > 0)
-            {
-                post.Volumes = volumesIds;
-                post.Automount = true;
-            }
-            else
-            {
-                post.Volumes = null;
-                post.Automount = null;
-            }
-
-            if (placementGroupId != 0)
-            {
-                post.PlacementGroup = placementGroupId;
-            }
-            else
-            {
-                post.PlacementGroup = null;
-            }
-
-            // Preparing raw
-            string raw = JsonConvert.SerializeObject(post, Formatting.Indented);
-
-            // Send post
-            string jsonResponse = await Core.SendPostRequest(_token, "/servers", raw);
-
-            // Return
-            JObject result = JObject.Parse(jsonResponse);
-            return JsonConvert.DeserializeObject<Server>($"{result["server"]}") ?? new Server();
+            // The eDataCenter enum members (fsn1, nbg1, hel1, ash, hil) are the
+            // Location names expected by the Hetzner API, so pass them as-is.
+            return await Create(dataCenter.ToString(), imageId, name, serverType, ipv4, ipv6,
+                privateNetoworksIds, sshKeysIds, volumesIds, placementGroupId, userData);
         }
 
         /// <summary>
         /// Creates a new Server. Returns preliminary information about the Server as well as an Action that covers progress of creation.
         /// </summary>
-        /// <param name="datacenterId">ID of the Datacenter</param>
+        /// <param name="datacenterId">ID of the Datacenter. The Datacenter's Location is resolved and used, as the Hetzner API no longer accepts a datacenter on Server creation.</param>
         /// <param name="imageId">ID or name of the Image the Server is created from</param>
         /// <param name="name">Name of the Server to create (must be unique per Project and a valid hostname as per RFC 1123)</param>
         /// <param name="serverType">ID or name of the Server type this Server should be created with</param>
@@ -187,10 +121,45 @@ namespace HetznerCloudApi.Client
             long placementGroupId = 0,
             string userData = "")
         {
+            // The Hetzner API no longer accepts a datacenter on Server creation, only a
+            // Location. Resolve the Datacenter to its Location to keep this overload working.
+            Datacenter datacenter = await new DatacenterClient(_token).Get(datacenterId);
+            return await Create(datacenter.Location.Name, imageId, name, serverType, ipv4, ipv6,
+                privateNetoworksIds, sshKeysIds, volumesIds, placementGroupId, userData);
+        }
+
+        /// <summary>
+        /// Creates a new Server. Returns preliminary information about the Server as well as an Action that covers progress of creation.
+        /// </summary>
+        /// <param name="location">ID or name of the Location to create the Server in (e.g. "fsn1", "nbg1", "hel1", "ash", "hil")</param>
+        /// <param name="imageId">ID or name of the Image the Server is created from</param>
+        /// <param name="name">Name of the Server to create (must be unique per Project and a valid hostname as per RFC 1123)</param>
+        /// <param name="serverType">ID or name of the Server type this Server should be created with</param>
+        /// <param name="ipv4">Attach an IPv4 on the public NIC. If false, no IPv4 address will be attached. Defaults to true.</param>
+        /// <param name="ipv6">Attach an IPv6 on the public NIC. If false, no IPv6 address will be attached. Defaults to true.</param>
+        /// <param name="privateNetoworksIds">Network IDs which should be attached to the Server private network interface at the creation time</param>
+        /// <param name="sshKeysIds">SSH key IDs which should be injected into the Server at creation time</param>
+        /// <param name="volumesIds">Volume IDs which should be attached to the Server at the creation time. Volumes must be in the same Location.</param>
+        /// <param name="placementGroupId">ID of the Placement Group the server should be in</param>
+        /// <param name="userData">Cloud-Init user data to use during Server creation. This field is limited to 32KiB.</param>
+        /// <returns></returns>
+        public async Task<Server> Create(
+            string location,
+            long imageId,
+            string name,
+            long serverType,
+            bool ipv4 = true,
+            bool ipv6 = true,
+            List<long> privateNetoworksIds = default,
+            List<long> sshKeysIds = default,
+            List<long> volumesIds = default,
+            long placementGroupId = 0,
+            string userData = "")
+        {
 
             Post post = new Post
             {
-                Datacenter = datacenterId,
+                Location = location,
                 Image = imageId,
                 Name = name,
                 ServerType = serverType,
@@ -284,8 +253,8 @@ namespace HetznerCloudApi.Client
             [JsonProperty("ssh_keys", NullValueHandling = NullValueHandling.Ignore)]
             public List<long> SshKeys { get; set; }
 
-            [JsonProperty("datacenter", NullValueHandling = NullValueHandling.Ignore)]
-            public long Datacenter { get; set; }
+            [JsonProperty("location", NullValueHandling = NullValueHandling.Ignore)]
+            public string Location { get; set; }
 
             [JsonProperty("image", NullValueHandling = NullValueHandling.Ignore)]
             public long Image { get; set; }

@@ -58,6 +58,13 @@ long serverTypeId = 22; // ID or name of the Image the Server is created from
 Server server = await hetznerCloudClient.Server.Create(eDataCenter, imageId, name, serverTypeId);
 ```
 
+> **Note:** The Hetzner Cloud API no longer accepts a `datacenter` when creating a Server; it now expects a `location`. The `datacenterId` and `eDataCenter` overloads keep working (the `datacenterId` is resolved to its Location automatically), but you can also pass a Location ID or name directly:
+>
+> ```csharp
+> string location = "ash"; // ID or name of the Location (e.g. "fsn1", "nbg1", "hel1", "ash", "hil")
+> Server server = await hetznerCloudClient.Server.Create(location, imageId, name, serverTypeId);
+> ```
+
 ## Create a Server (Complete)
 
 In addition to creating a server (simple), we can specify every detail of the server's resources. This includes indicating whether to enable IPv4, IPv6, passing a list of network IDs, SSH key IDs, specifying the volumes to mount, and even including it in a "placement group." We can also indicate the startup script with Cloud-Init scripts
